@@ -1,5 +1,8 @@
 import os
 import json
+import cv2
+import numpy as np
+
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
@@ -18,7 +21,8 @@ from pydm.utilities import connection
 #maybe tomorrow: undo/back and redo/forward functionality
 
 #This is the kind of thing we would want to structure in a JSON file
-Map = {'Buildings': {"B750": [Qt.red, QRectF(10, 10, 100, 100)], "B950": [Qt.green, QRectF(10, 100, 100, 100)], "B208": [Qt.blue, QRectF(200, 50, 100, 100)]}}
+
+Map = {'Buildings': {"B750": [], "B950": [], "B208": []}} # dictionary used for necessary hard coded information
 
 class GraphicsRectItem(QGraphicsRectItem):
     def __init__(self, i, parent=None):
@@ -41,6 +45,20 @@ class GraphicsRectItem(QGraphicsRectItem):
         painter.restore()
         
 
+class GraphicsItemGroup(QGraphicsItemGroup):
+
+    def __init__(self, parent=None):
+        super(GraphicsItemGroup, self).__init__(parent)
+
+class GraphicsScene(QGraphicsScene):
+
+    def __init__(self, parent = None):
+        super(GraphicsScene, self).__init__(parent)
+    
+    def mousePressEvent(self, event):
+
+        print(event.pos())
+
 
 class InfrastructureDisplay(Display):
 
@@ -49,7 +67,7 @@ class InfrastructureDisplay(Display):
         super(InfrastructureDisplay, self).__init__(parent=parent,args=args, macros=None)
 
         #reference to PyDMApplication - this line is what makes it so that you can avoid 
-        #having to define main() and instead pydm handles that for you
+        #having to define main() and instead pydm handles that for you - it is a subclass of QWidget
         self.app = QApplication.instance()
         #load data from file
         self.load_data()
@@ -103,12 +121,97 @@ class InfrastructureDisplay(Display):
         self.frame.setMinimumHeight(500)
 
         self.view = QGraphicsView()
-        self.scene = QGraphicsScene()
+        self.scene = GraphicsScene()
+        self.pixmapItem =QGraphicsPixmapItem()
         self.scene.setSceneRect(0, 0, 500, 500)
+        self.view.setScene(self.scene)
+
+        self.view.scene().addItem(self.pixmapItem)
+        #would eventually make this fit to size of screen, waiting cause it's annoying.
+        self.buildingItems = GraphicsItemGroup()
+        
+
+        self._layout.addWidget(self.view)
         self.addBuildings()
     
     def addBuildings(self):
         
+        filename = os.getcwd() + "\examplebuildings.png"
+        img = cv2.imread(filename)
+        imgray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+        ret,thresh = cv2.threshold(imgray, 250, 255, 0)
+        contours , h = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+
+        MinCntArea = 5000.
+        MaxCntArea = 100000.
+
+        self.rectparameters = []
+        for cnt in contours:
+            
+            if cv2.contourArea(cnt) > MinCntArea and cv2.contourArea(cnt) < MaxCntArea:
+                # how does the find contours function parse the image? 
+                # I am thinking of making rectItems which are invisible and added to the scene - they will go
+                # directly on top of each rectangle as it is found in the image.
+                # Then a room is created based on certain parameters it looks for in epics/databases
+                # say it give it a name as for example B950 - hutch 1.1
+                # It loads the map for that room with the items drawn on
+                
+                
+                cv2.drawContours(img, cnt, -1, (0, 255, 0), 3) # this is a green rectangle which shows the found contour
+
+                #cv2.circle(img, (min(cnt.T[0][0]), min(cnt.T[1][0])), 4, 4) #makes a circle around the upper left corner
+
+                #np.set_printoptions(threshold=np.inf) #this is to make it so that the whole numpy array prints to the terminal
+
+                self.rectparameters.append([min(cnt.T[0][0]), min(cnt.T[1][0]), max(cnt.T[0][0])-min(cnt.T[0][0]), max(cnt.T[1][0])-min(cnt.T[1][0])]) # x, y, height, width
+                #print("height = ", max(cnt.T[0][0])-min(cnt.T[0][0]), "width = ", max(cnt.T[1][0])-min(cnt.T[1][0]), "upper left corner = ", (min(cnt.T[1][0]), min(cnt.T[0][0])), self.rectparameters)
+
+                
+        
+        #cv2.imshow('img', img)
+        #cv2.waitKey(0)
+        #cv2.destroyAllWindows()
+
+        #cv2.rectangle(img, (self.rectparameters[0][0], self.rectparameters[0][1]), 
+        #                   (self.rectparameters[0][0] + self.rectparameters[0][2], self.rectparameters[0][1] + self.rectparameters[0][3]),
+        #                   (255, 0, 0), -1) # draws a blue filled in rectangle - did this to make sure I had the indicies correct for x, y, width, and height
+
+        height, width, channel = img.shape
+        self.rectparameters += [height, width]
+        print(self.rectparameters)
+        bytesPerLine = 3*width
+        qimg = QImage(img.data, width, height, bytesPerLine, QImage.Format_RGB888).rgbSwapped()
+
+        self.image = QPixmap.fromImage(qimg)
+        self.image = self.image.scaled(self.scene.width(), self.scene.height())
+        self.pixmapItem.setPixmap(self.image)
+
+        for i in range(len(self.rectparameters)-2):
+            
+            rect = QGraphicsRectItem(QRectF(QPointF(self.rectparameters[i][0]*(self.scene.width()/width),
+                                                                self.rectparameters[i][1]*(self.scene.height()/height)),
+                                                                QPointF((self.rectparameters[i][0] + self.rectparameters[i][2]) * self.scene.width()/width,
+                                                                (self.rectparameters[i][1] + self.rectparameters[i][3]) * self.scene.height()/height)))
+            #rect.setFlags(Qt.ItemIsSelectable)
+            rect.setAcceptHoverEvents(True)
+            rect.setGroup(self.buildingItems)
+
+        self.scene.addItem(self.buildingItems)
+            #self.scene.addRect(QRectF(QPointF(self.rectparameters[i][0]*(self.scene.width()/width),
+            #                                                    self.rectparameters[i][1]*(self.scene.height()/height)),
+            #                                                    QPointF((self.rectparameters[i][0] + self.rectparameters[i][2]) * self.scene.width()/width,
+            #                                                    (self.rectparameters[i][1] + self.rectparameters[i][3]) * self.scene.height()/height)), pen=QPen(), brush=QBrush(Qt.blue))
+            
+            
+            
+    
+    def mousePressEvent(self, event):
+        print(event.pos(), 'Hi')
+        #print(self.view.mapToItem(event.pos()), 'penis')
+        print(self.view.mapFromScene(event.pos()), "boo")
+        print(self.pixmapItem.mapToScene(event.pos()))
+        '''
         for i in range(len(Map["Buildings"])):#["Buildings"].values():
 
             rectItem = GraphicsRectItem(i)
@@ -116,7 +219,7 @@ class InfrastructureDisplay(Display):
 
         self.view.setScene(self.scene)
         self._layout.addWidget(self.view)
-        
+        '''        
     '''
     def paintEvent(self, event):
         p = QPainter()
