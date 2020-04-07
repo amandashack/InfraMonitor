@@ -20,7 +20,16 @@ from pydm.utilities import connection
 #tomorrow: make the items clickable and have a new blank window open within the scene
 #maybe tomorrow: undo/back and redo/forward functionality
 
-        
+'''
+
+Having the window pop up for the correct building thoughts:
+this may be a signals and slots solution or maybe parent and child widget thing
+when mouse press event happens for the Item it could either
+send a signal to the correct building class based on location
+or it could access a function in the parent (QGraphicsView)
+which would then handle the pointing to the correct building
+
+'''
 
 class GraphicsRectItem(QGraphicsRectItem):
 
@@ -208,114 +217,5 @@ class InfrastructureDisplay(Display):
         self.view.setMouseTracking(True)
 
         self._layout.addWidget(self.view)
-
-
-
-        '''
-        self.scene = GraphicsScene()
-        self.pixmapItem =QGraphicsPixmapItem()
-        self.scene.setSceneRect(0, 0, 500, 500)
-        self.view.setScene(self.scene)
-
-        self.view.scene().addItem(self.pixmapItem)
-        #would eventually make this fit to size of screen, waiting cause it's annoying.
-        self.buildingItems = GraphicsItemGroup()
-        self.buildingParams = []
-        
-        self.scalef = [1, 1]
-
-        self._layout.addWidget(self.view)
-        self.addBuildings()
-    
-    def addBuildings(self):
-        
-        filename = os.getcwd() + "\examplebuildings.png"
-        img = cv2.imread(filename)
-        imgray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-        ret,thresh = cv2.threshold(imgray, 250, 255, 0)
-        contours , h = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
-
-        MinCntArea = 5000.
-        MaxCntArea = 100000.
-
-        for cnt in contours:
-            
-            if cv2.contourArea(cnt) > MinCntArea and cv2.contourArea(cnt) < MaxCntArea:
-                # how does the find contours function parse the image? 
-                # I am thinking of making rectItems which are invisible and added to the scene - they will go
-                # directly on top of each rectangle as it is found in the image.
-                # Then a room is created based on certain parameters it looks for in epics/databases
-                # say it give it a name as for example B950 - hutch 1.1
-                # It loads the map for that room with the items drawn on
-                
-                
-                cv2.drawContours(img, cnt, -1, (0, 255, 0), 3) # this is a green rectangle which shows the found contour
-
-                #cv2.circle(img, (min(cnt.T[0][0]), min(cnt.T[1][0])), 4, 4) #makes a circle around the upper left corner
-
-                #np.set_printoptions(threshold=np.inf) #this is to make it so that the whole numpy array prints to the terminal
-
-                self.buildingParams.append([min(cnt.T[0][0]), min(cnt.T[1][0]), max(cnt.T[0][0])-min(cnt.T[0][0]), max(cnt.T[1][0])-min(cnt.T[1][0])]) # x, y, height, width
-                #print("height = ", max(cnt.T[0][0])-min(cnt.T[0][0]), "width = ", max(cnt.T[1][0])-min(cnt.T[1][0]), "upper left corner = ", (min(cnt.T[1][0]), min(cnt.T[0][0])), self.buildingParams)
-
-                
-        
-        #cv2.imshow('img', img)
-        #cv2.waitKey(0)
-        #cv2.destroyAllWindows()
-
-        #cv2.rectangle(img, (self.buildingParams[0][0], self.buildingParams[0][1]), 
-        #                   (self.buildingParams[0][0] + self.buildingParams[0][2], self.buildingParams[0][1] + self.buildingParams[0][3]),
-        #                   (255, 0, 0), -1) # draws a blue filled in rectangle - did this to make sure I had the indicies correct for x, y, width, and height
-
-        height, width, channel = img.shape
-        bytesPerLine = 3*width
-        qimg = QImage(img.data, width, height, bytesPerLine, QImage.Format_RGB888).rgbSwapped()
-
-        self.ogimage = QPixmap.fromImage(qimg)
-        self.image = self.ogimage.scaled(self.scene.width(), self.scene.height())
-        self.pixmapItem.setPixmap(self.image)
-
-        self.updateScalef()
-        self.buildingParams += self.scalef
-        
-        #self.buildingItems.addItems(self.buildingParams)
-
-        self.scene.addItem(self.buildingItems)
-
-    def updateScalef(self):
-
-        self.scalef[0] = self.image.width()/self.ogimage.width()
-        self.scalef[1] = self.image.height()/self.ogimage.height()
-
-    def mousePressEvent(self, event):
-        print(event.pos(), 'Hi')
-        #print(self.view.mapToItem(event.pos()), 'penis')
-        print(self.view.mapFromScene(event.pos()), "boo")
-        print(self.pixmapItem.mapToScene(event.pos()))
-        
-        for i in range(len(Map["Buildings"])):#["Buildings"].values():
-
-            rectItem = GraphicsRectItem(i)
-            self.scene.addItem(rectItem)
-
-        self.view.setScene(self.scene)
-        self._layout.addWidget(self.view)
-        
-    def paintEvent(self, event):
-        p = QPainter()
-        p.begin(self)
-        self.rect = QRectF(0, 0, 100, 100)
-        self.pen = QPen(Qt.black, 2, Qt.SolidLine)
-        p.setPen(self.pen)
-        p.setFont(QFont('Arial', 10))
-        
-        p.drawText(self.rect, "Hello")
-        p.drawRect(self.rect)
-        
-        p.end()
-    '''
-    
 
 
